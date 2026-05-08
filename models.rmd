@@ -1,0 +1,12 @@
+# Load necessary libraries
+library(readr)
+
+# Set the path to your data file
+data_path <- "log_return.csv"
+
+# Import the log returns data
+log_returns_data <- read_csv(data_path)
+
+# Display the first few rows of the data
+head(log_returns_data)
+
