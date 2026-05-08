@@ -1,0 +1,179 @@
+---
+title: "garch"
+author: "Lydia Bao"
+date: "12/9/2024"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# GARCH Model
+
+This is an R Markdown document for conducting GARCH models respectively.
+
+### Load data
+```{r}
+library(readr)
+
+# Set the path to your data file
+data_path <- "log_return.csv"
+
+# Import the log returns data
+log_returns_data <- read_csv(data_path)
+
+# Display the first few rows of the data
+head(log_returns_data)
+```
+
+# Model pipeline
+```{r}
+# 加载必要的库
+library(car)
+library(ggplot2)
+library(TTR)
+library(FinTS)
+library(tseries)
+library(rugarch)
+
+# 定义一个函数，用于对单个汇率进行完整的GARCH分析
+analyze_garch <- function(data, exchange_rate, external_regressor) {
+  
+  # 1. 绘制 Q-Q 图，检查对数收益率的分布
+  qqPlot(data[[exchange_rate]], main = paste("Q-Q Plot of", exchange_rate, "Log Returns"))
+  
+  # 2. 绘制时间序列图
+  ggplot(data, aes(x = Date, y = .data[[exchange_rate]])) +
+    geom_line() +
+    labs(title = paste(exchange_rate, "Log Returns Over Time"),
+         x = "Date", y = "Log Return") +
+    theme_minimal()
+  
+  # 3. 计算滚动标准差并绘制滚动波动性图
+  data$Rolling_SD <- runSD(data[[exchange_rate]], n = 30)
+  ggplot(data, aes(x = Date)) +
+    geom_line(aes(y = .data[[exchange_rate]]), color = "blue") +
+    geom_line(aes(y = Rolling_SD), color = "red") +
+    labs(title = paste(exchange_rate, "Log Returns and Rolling Standard Deviation"),
+         x = "Date", y = "Value") +
+    theme_minimal()
+  
+  # 4. 绘制自相关函数（ACF）图
+  acf(data[[exchange_rate]], main = paste("ACF of", exchange_rate, "Log Returns"))
+  acf(data[[exchange_rate]]^2, main = paste("ACF of Squared", exchange_rate, "Log Returns"))
+  
+  # 5. ARCH效应检验
+  arch_test <- ArchTest(data[[exchange_rate]], lags = 5)
+  print(paste("ARCH Test for", exchange_rate))
+  print(arch_test)
+  
+  # 6. 平稳性检验（ADF检验）
+  adf_result <- adf.test(data[[exchange_rate]])
+  print(paste("ADF Test for", exchange_rate))
+  print(adf_result)
+  
+  # 7. 构建GARCH模型
+  spec <- ugarchspec(
+    variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+    mean.model = list(armaOrder = c(0, 0), external.regressors = as.matrix(data[[external_regressor]])),
+    distribution.model = "norm"
+  )
+  fit <- ugarchfit(spec, data = data[[exchange_rate]])
+  print(paste("GARCH Model Results for", exchange_rate))
+  print(fit)
+  
+  # 8. 提取参数
+  params <- coef(fit)
+  print(paste("GARCH Parameters for", exchange_rate))
+  print(params)
+  
+  # 9. 检查标准化残差的自相关性
+  residuals <- residuals(fit, standardize = TRUE)
+  acf(residuals, main = paste("ACF of Standardized Residuals for", exchange_rate))
+  
+  # 10. 残差ARCH效应检验
+  arch_test <- ArchTest(residuals, lags = 5)
+  print(paste("ARCH Test for Residuals of", exchange_rate))
+  print(arch_test)
+  
+  # 返回模型结果
+  return(list(fit = fit, params = params, residuals = residuals))
+}
+```
+
+## 针对不同的汇率完成分析
+```{r}
+usd_rub_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_RUB", external_regressor = "Brent_Crude")
+```
+
+```{r}
+usd_nok_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_NOK", external_regressor = "Brent_Crude")
+```
+
+```{r}
+usd_cad_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_CAD", external_regressor = "Brent_Crude")
+```
+
+```{r}
+usd_sar_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_SAR", external_regressor = "Brent_Crude")
+```
+
+
+```{r}
+usd_jpy_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_JPY", external_regressor = "Brent_Crude")
+```
+
+
+```{r}
+usd_cny_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_CNY", external_regressor = "Brent_Crude")
+```
+
+
+```{r}
+usd_inr_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_INR", external_regressor = "Brent_Crude")
+```
+
+
+```{r}
+usd_eur_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_EUR", external_regressor = "Brent_Crude")
+```
+
+
+```{r}
+usd_brl_results <- analyze_garch(data = log_returns_data, exchange_rate = "USD_BRL", external_regressor = "Brent_Crude")
+```
+
+## Result Analysis
+```{r}
+exchange_rates <- c("USD_RUB", "USD_NOK", "USD_SAR", "USD_CAD", "USD_JPY", "USD_CNY", "USD_INR", "USD_EUR", "USD_BRL")
+
+# 手动提取系数
+gamma_coefficients <- data.frame(
+  Variable = c("USD_RUB", "USD_NOK", "USD_SAR", "USD_CAD", 
+               "USD_JPY", "USD_CNY", "USD_INR", "USD_EUR", "USD_BRL"),
+  Gamma = c(usd_rub_results$params["mxreg1"],
+            usd_nok_results$params["mxreg1"],
+            usd_sar_results$params["mxreg1"],
+            usd_cad_results$params["mxreg1"],
+            usd_jpy_results$params["mxreg1"],
+            usd_cny_results$params["mxreg1"],
+            usd_inr_results$params["mxreg1"],
+            usd_eur_results$params["mxreg1"],
+            usd_brl_results$params["mxreg1"])
+)
+
+# 打印结果
+print(gamma_coefficients)
+
+# 可视化展示
+library(ggplot2)
+ggplot(gamma_coefficients, aes(x = Variable, y = Gamma)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Impact of Oil Price on Exchange Rate Volatility", x = "Exchange Rate", y = "Gamma Coefficient") +
+  theme_minimal()
+```
+
+
